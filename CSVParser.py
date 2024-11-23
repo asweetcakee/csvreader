@@ -41,20 +41,17 @@ class CSVParser:
         # print(result)
         preview = self.data.head(3)
     
-        # Инициализируем таблицу
+        # Initilizes PrettyTtable lib
         table = PrettyTable()
         table.field_names = preview.columns.tolist()
     
-        # Заполняем таблицу данными
+        # Fills in the data
         for row in preview.values:
             table.add_row(row)
-    
-        # Печатаем красиво
         print(table)
 
     def get_unique_regions(self, region_column):
         """Returns unique regions from a selected column"""
         if self.data is None:
             raise ValueError("CSV file is not uploaded.")
-
         return self.data[region_column].str.upper().unique().tolist()
