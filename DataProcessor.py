@@ -7,13 +7,13 @@ class DataProcessor:
         self.params = params
         self.processed_data = {region.upper(): set() for region in params}
         self.partial_data = {f"{region.upper()}-неполные номера": set() for region in params}
-
+        self.count = 0
+    
+        
     def process_row(self, region, phone):
         """Processes 1 row"""
-        # print("--REGION: " + row[region_col])
-        # print("--PHONE: " + row[phone_col])
-        
-        region = region.upper()
+        region = region.strip()
+        phone = phone.strip()
         
         region_params = self.params.get(region)
         if not region_params:
@@ -21,13 +21,16 @@ class DataProcessor:
 
         country_code = region_params["code"]
         number_length = region_params["length"]
-
-        if not isinstance(phone, str):
-            phone = str(phone)
+               
+        phone = str(phone)
+        country_code = str(country_code)
         
         if phone.startswith("+"):
-            phone = phone.lstrip("+")  # Gets rid of "+" sign
-
+            phone = phone.lstrip("+").strip()  # Gets rid of "+" sign
+        
+        if country_code.startswith("+"):
+            country_code = country_code.lstrip("+").strip() # Gets rid of "+" sign
+        
         if phone.startswith(country_code):
             number = phone[len(country_code):] # Gets a number without a country code
             if len(number) == number_length:
@@ -42,3 +45,10 @@ class DataProcessor:
     
     def print_data(self):
         print(self.processed_data)
+    
+    def print_check(self, val):
+        if self.count != 3:
+            print("--T val: " + val)
+            self.count += 1
+    
+            
