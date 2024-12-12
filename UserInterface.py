@@ -9,13 +9,13 @@ class UserInterface:
     def __init__(self, root):
         self.root = root
         self.root.title("CSV Filter Tool")
-        self.root.geometry("600x450")
+        self.root.geometry("600x400")
 
         # Variables
         self.csv_parser = None
-        self.processor = None
+        self.processed_data = None
+        self.excel_writer = None
         self.file_path = ""
-        self.params = {}
         self.checkbox_vars = {}
 
         # Creating an interface
@@ -82,6 +82,7 @@ class UserInterface:
     def select_file(self):
         self.file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
         if not self.file_path:
+            print("Files was not selected.")
             return
 
         try:
@@ -164,11 +165,11 @@ class UserInterface:
         
         tk.Label(checkbox_frame_main, text="3. Укажите регионы для фильтрации:", wraplength=150, anchor=tk.W).grid(row=0, column=0, sticky=tk.W)
         
-        self.checkbox_frame = tk.Frame(checkbox_frame_main, width=150, height=70, pady=10, padx=10)
+        self.checkbox_frame = tk.Frame(checkbox_frame_main, width=150, height=100, pady=10, padx=10)
         self.checkbox_frame.grid(row=1, column=0, sticky="nw")
         
         # Creates Canvas for scroll
-        self.canvas = tk.Canvas(self.checkbox_frame, width=100, height=70)
+        self.canvas = tk.Canvas(self.checkbox_frame, width=100, height=100)
         self.canvas.grid(row=0, column=0, sticky="n")
 
         # Vertical scrollbar
@@ -181,99 +182,42 @@ class UserInterface:
         self.checkbox_inner_frame = tk.Frame(self.canvas)
         self.canvas.create_window((0, 0), window=self.checkbox_inner_frame, anchor="nw")
         
-        apply_btn = tk.Button(frame, text="4. Продолжить ввод фильтров", command=self.apply_settings)
+        apply_btn = tk.Button(frame, text="4. Обработать данные", command=self.apply_settings)
         apply_btn.grid(row=0, column=0, sticky="ew")
 
         # Binds handler that changes Listbox content once any value was selected in the region dropdown
         self.region_dropdown.bind("<<ComboboxSelected>>", self.update_filter_listbox)
-
-    def create_filter_menu(self, selected_regions):
-        # Creates new Filtering window
-        new_window = tk.Toplevel(self.root)
-        new_window.title("Введите параметры фильтрации")
-        
-        # Content frame
-        frame = tk.Frame(new_window, pady=10, padx=10)
-        frame.pack(fill=tk.X)
-
-        label = tk.Label(frame, text="Введите параметры фильтрации", font=("Arial", 14))
-        label.pack(pady=10)
-        
-        for region in selected_regions:
-            region_frame = tk.Frame(frame, pady=5)
-            region_frame.pack(fill=tk.X, padx=10, pady=5)
-            
-            # code = input(f"Введите код для {region}: ")
-            # length = int(input(f"Введите длину номера для {region}: "))
-            # self.params[region] = {"code": code, "length": length}
-            
-            # Region phone number code
-            tk.Label(region_frame, text=f"Код номера региона {region}: ").pack(side=tk.LEFT)
-            code_text = tk.Text(region_frame, height=1, width=10)  # Используем Text для ввода
-            code_text.pack(side=tk.LEFT, padx=5)
-
-            # Phone number legth
-            tk.Label(region_frame, text=f"Длина номера региона {region}:").pack(side=tk.LEFT)
-            length_text = tk.Text(region_frame, height=1, width=10)  # Используем Text для ввода
-            length_text.pack(side=tk.LEFT, padx=5)
-            
-            self.params[region] = {"code": code_text, "length": length_text}
-
-        # Processing starting button
-        start_button = tk.Button(frame, text="Обработать данные", command=self.start_processing)
-        start_button.pack(pady=20, padx=50)
 
     def apply_settings(self):       
         if not self.csv_parser:
             messagebox.showerror("Ошибка", "Сначала выберите CSV файл.")
             return
 
-        self.region_col = self.region_col_var.get()
-        self.phone_col = self.phone_col_var.get()
+        self.region_col = self.region_col_var.get().strip()
+        self.phone_col = self.phone_col_var.get().strip()
         
         if not self.region_col or not self.phone_col:
             messagebox.showerror("Ошибка", "Выберите столбцы для регионов и телефонов.")
             return
 
         selected_regions = [region for region, var in self.checkbox_vars.items() if var.get()]
-        
-        # !!!!!!!!!!!!!!!!DEBUGG DELETE ONCE FINISHED!!!!!!!!!!!!!!!!!
-        for el in selected_regions:
-            print("--T:" + str(el))
-        
+                
         if not selected_regions:
             messagebox.showerror("Ошибка", "Выберите хотя бы один регион.")
             return
 
-        self.create_filter_menu(selected_regions)
+        self.start_processing(selected_regions)
                
-    def start_processing(self):
-        
-        # for region in selected_regions:
-        #     code = input(f"Введите код для {region}: ")
-        #     length = int(input(f"Введите длину номера для {region}: "))
-        #     self.params[region] = {"code": code, "length": length}
-            #print(f"--T code and length for {region}:{self.params[region]}")
-        
-        # Processes data after a user entered data
-        for region, widgets in self.params.items():
-            # Getting data from text widgets
-            code = widgets["code"].get("1.0", tk.END).strip()
-            length = int(widgets["length"].get("1.0", tk.END).strip())
-            
-            # Updates self.params with new entries
-            self.params[region] = {"code": code, "length": length}
-            print(f"--T: {region} -> code: {code}, length: {length}")
-
-        self.processor = DataProcessor(self.params)
+    def start_processing(self, selected_regions):
+        self.processed_data = DataProcessor(selected_regions)
         
         # Makes sure self.csv_parser is safe to use and not None
         if self.csv_parser and self.csv_parser.data is not None:
             for _, row in self.csv_parser.data.iterrows():
-                self.processor.process_row(str(row[self.region_col]).upper(), str(row[self.phone_col]).upper())
+                self.processed_data.process_row(row[self.phone_col])
             self.write_to_excel()
         else:
-            messagebox.showerror("Ошибка", "Данные CSV не загружены.")
+            print("Ошибка", "Данные CSV не загружены.")
         
         # Closes filtering window after data proccessing is finished
         for window in self.root.winfo_children():
@@ -307,7 +251,8 @@ class UserInterface:
 
 
     def write_to_excel(self):
-        writer = ExcelWriter("phone_numbers_output.xlsx")
-        all_data = {**self.processor.processed_data, **self.processor.partial_data}
-        writer.write_to_excel(all_data)
-        messagebox.showinfo("Готово", "Файл успешно обработан и сохранён.")
+        writer_valid = ExcelWriter("valid_phones.xlsx")
+        writer_invalid = ExcelWriter("invalid_phones.xlsx") 
+        writer_valid.write_to_excel({**self.processed_data.valid_numbers})
+        writer_invalid.write_to_excel({**self.processed_data.invalid_numbers})
+        print("Готово", "Файл успешно обработан и сохранён.")   

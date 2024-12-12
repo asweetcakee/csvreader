@@ -10,3 +10,5 @@ __pycache__/
 
 venv/
 .env/
+
+List_of_modifications.txt
