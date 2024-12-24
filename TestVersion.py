@@ -1,7 +1,6 @@
 import re
 import pandas as pd
 import phonenumbers 
-from phonenumbers import geocoder
 
 
 def get_numbers(file_name:str) -> list:
@@ -89,14 +88,12 @@ def file_edit(numbers):
             file.write(line + '\n')
 
 
-def valid_check(phone_list, region = "ES", allowed_code = '34'):
+def valid_check(phone_list,region = "AR", allowed_code = '54'):
 
     valid_numbers = []
     invalid_numbers = []
-    excepted = []
     for phone in phone_list:
         try:
-            phone = "34663776033"
             # Парсим номер
             parsed_number = phonenumbers.parse(phone, None)  # None означает международный формат
             # Проверяем валидность номера
@@ -109,9 +106,9 @@ def valid_check(phone_list, region = "ES", allowed_code = '34'):
             else:
                 invalid_numbers.append(phone + "невалид")
         except phonenumbers.NumberParseException:
-            excepted.append(phone + "ex")
+            invalid_numbers.append(phone + "невалид")
 
-    
+    print(invalid_numbers)
     
     result = []
     for number in valid_numbers:
@@ -119,31 +116,16 @@ def valid_check(phone_list, region = "ES", allowed_code = '34'):
             result.append(f'{number[:2]}9{number[2:]}')
         else:
             result.append(number)
-    #result = set(result)
-    print("--T | valid")
-    print(result)
-    print("--T | invalid")
-    print(excepted)
+    
+    result = set(result)
     return result
 
 
 
 
 
-phone_numbers = get_numbers('at_part_1.csv')
+phone_numbers = get_numbers('ar_part_1.csv')
 
 validating_numbers = valid_check(phone_numbers)
 
 file_edit(validating_numbers)
-
-# parsed1 = phonenumbers.parse("436646515909", None)
-# parsed2 = phonenumbers.parse("4396645848013", None)
-
-# Номер телефона в международном формате
-phone_number = phonenumbers.parse("+34663776033")  # Замените на ваш номер
-
-# Определение региона
-region = geocoder.description_for_number(phone_number, None)
-
-print(f"Регион номера: {region}")
-print(f"is valid?: {phonenumbers.is_valid_number(phone_number)}")
