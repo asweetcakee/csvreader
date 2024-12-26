@@ -11,23 +11,30 @@ class ExcelWriter:
         """
         wb = Workbook()
         rfm_segment = self.get_date()
+        sheet_created = False  # Track if at least one sheet is created
+
         for sheet_name, phone_numbers in data.items():
             ws = wb.create_sheet(sheet_name)
             ws.append(["phone", "full_name", "age", "city", "import_id", "gender", "rfm_segment", "game_id"])
 
-            # Fills in the data
+            # Fill in the data
             import_id = 701120240001
             for phone in phone_numbers:
                 ws.append([phone, "", 1995, "", import_id, "", rfm_segment, import_id])
                 import_id += 1
 
-            # !!! Need to add a logic of setting rfm_segmenta value basing on the data a file is being processed
-            # !!! for example: cold_21_11 <- 21 - is a day, 11 - is a month
+            sheet_created = True  # Mark that at least one sheet is created
 
-        # Deletes the default excel sheet 
+        # Deletes the default excel sheet if it's not needed
         default_sheet = wb["Sheet"]
-        if default_sheet:
+        if default_sheet and sheet_created:
             wb.remove(default_sheet)
+
+        # Ensure there's at least one sheet in the workbook
+        if not sheet_created:
+            ws = wb.active  # Use the default sheet
+            ws.title = "Empty"
+            ws.append(["No data available"])  # Add a placeholder row
 
         wb.save(self.output_file)
 
