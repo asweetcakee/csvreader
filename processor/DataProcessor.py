@@ -1,6 +1,6 @@
 import re
 import phonenumbers
-from CountriesEnum import CountriesEnum
+from enums.CountriesEnum import CountriesEnum
 
 class DataProcessor:
     def __init__(self, selected_regions):

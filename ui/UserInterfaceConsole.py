@@ -1,7 +1,7 @@
-from CSVParser import CSVParser
-from DataProcessor import DataProcessor
-from ExcelWriter import ExcelWriter
-from CountriesEnum import CountriesEnum
+from parser.CSVParser import CSVParser
+from processor.DataProcessor import DataProcessor
+from writer.ExcelWriter import ExcelWriter
+from enums.CountriesEnum import CountriesEnum
 
 class UserInterfaceConsole:
     def __init__(self):

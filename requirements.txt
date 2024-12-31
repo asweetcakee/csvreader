@@ -1,0 +1,6 @@
+phonenumbers
+pandas
+openpyxl
+prettytable
+chardet
+customtkinter
