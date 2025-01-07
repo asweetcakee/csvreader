@@ -1,5 +1,7 @@
 import os
 import customtkinter
+import logging
+
 from tkinter import filedialog, messagebox
 from PIL import Image
 
@@ -7,28 +9,30 @@ from parser.CSVParser import CSVParser
 from processor.DataProcessor import DataProcessor
 from writer.ExcelWriter import ExcelWriter
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 class AutoProcessingTab:
-    def __init__(self, parent):
-        self.parent = parent
+    def __init__(self, parent: customtkinter.CTkFrame):
+        self.parent: customtkinter.CTkFrame = parent
         self.csv_parser = None
-        self.file_path = ""
-        self.file_title = ""
+        self.file_path: str = ""
+        self.file_title: str = ""
         
         # CONSTANTS
-        self.REGION_COLUMN = "country"
-        self.PHONE_COLUMN = "phone"
+        self.REGION_COLUMN: str = "country"
+        self.PHONE_COLUMN: str = "phone"
         
-        self.checkbox_var = customtkinter.StringVar(value="off")
-        self.configure_tab()
+        self.checkbox_var: customtkinter.StringVar = customtkinter.StringVar(value="off")
+        self.__configure_tab()
         
-    def configure_tab(self):
+    def __configure_tab(self):
         self.parent.grid_columnconfigure(0, weight=1)
-        self._create_top_frame()
-        self._create_text_box()
-        self._create_checkbox()
-        self._create_process_button()
+        self.__create_top_frame()
+        self.__create_text_box()
+        self.__create_checkbox()
+        self.__create_process_button()
     
-    def _create_top_frame(self):
+    def __create_top_frame(self):
         # Top frame
         top_frame = customtkinter.CTkFrame(self.parent, fg_color="#f2f2f2")
         top_frame.grid(row=0, column=0, padx=0, pady=10, sticky="nsew")
@@ -45,77 +49,80 @@ class AutoProcessingTab:
         select_file_button = customtkinter.CTkButton(
             top_frame, text="Выбрать файл", height=100, corner_radius=5,
             fg_color="#9FACF6", text_color="#0F1B60", font=("Rubik", 26),
-            command=self._select_file
+            command=self.__select_file
         )
         select_file_button.grid(row=0, column=1, padx=10, pady=0, sticky="ew")
         
-    def _create_text_box(self):
+    def __create_text_box(self):
         self.text_box = customtkinter.CTkTextbox(self.parent, width=540, height=150, wrap="none")
         self.text_box.grid(row=1, column=0, padx=10, pady=0, sticky="nsew")
         self.text_box.configure(state="disabled")
 
-    def _create_checkbox(self):
+    def __create_checkbox(self):
         checkbox = customtkinter.CTkCheckBox(
             self.parent, text="Смотреть по FTD", variable=self.checkbox_var,
-            onvalue="on", offvalue="off", command=self._checkbox_event
+            onvalue="on", offvalue="off", command=self.__checkbox_event
         )
         checkbox.grid(row=2, column=0, padx=10, pady=0, sticky="ew")
 
-    def _create_process_button(self):
+    def __create_process_button(self):
         process_button = customtkinter.CTkButton(
             self.parent, text="Обработать данные", corner_radius=5,
             fg_color="#9FACF6", height=50, text_color="#0F1B60", font=("Rubik", 20),
-            command=self._apply_settings
+            command=self.__apply_settings
         )
         process_button.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
 
-    def _select_file(self):
+    def __select_file(self):
         self.file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
         if not self.file_path:
-            print("File was not selected.")
+            logging.warning("Файл не был выбран.")
             return
-        self._load_csv()
+        self.__load_csv()
 
-    def _load_csv(self):
+    def __load_csv(self):
         try:
             # Load and display CSV preview
             self.csv_parser = CSVParser(self.file_path)
             self.csv_parser.read_csv()
-            # Gets first 3 entries
-            preview_text = self.csv_parser.data.head(3).to_string(index=False)
-            self._update_text_box(preview_text)
+            
+            # Gets first 3 entries preview
+            preview_text = self.csv_parser.get_columns()
+            self.__update_text_box(preview_text)
+            
+            # Gets selected file name
             self.file_title = self.csv_parser.get_file_name()
             
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить файл: {e}")
 
-    def _update_text_box(self, text):
-        self.text_box.configure(state="normal")
+    def __update_text_box(self, text: str):
+        self.text_box.configure(state="normal", font=("Courier", 12))
         self.text_box.delete("1.0", "end")
         self.text_box.insert("end", text)
         self.text_box.configure(state="disabled")
 
-    def _checkbox_event(self):
-        print("Checkbox value:", self.checkbox_var.get())
+    def __checkbox_event(self):
+        logging.info(f"FTD setting: {self.checkbox_var.get()}")
 
-    def _apply_settings(self):
+    def __apply_settings(self):
         if not self.csv_parser:
             messagebox.showerror("Ошибка", "Сначала выберите CSV файл.")
             return
 
         if self.checkbox_var.get() == "on":
-            self._process_ftd_case()
+            self.__process_ftd_case()
         
-        region = self._get_unique_region()[0]
-        self._process_with_settings(region)
+        region = self.__get_unique_region()[0]
+        self.__process_with_settings(region)
     
-    def _process_ftd_case(self):     
+    def __process_ftd_case(self):     
         try:
             self.csv_parser.data = self.csv_parser.data[self.csv_parser.data['firstdeposit_time'].notnull() & (self.csv_parser.data['firstdeposit_time'] != '')]                           
         except Exception as e:
             messagebox.showerror("Ошибка", f"Обработка FTD провалилась: {e}")
     
-    def _process_with_settings(self, region):
+    def __process_with_settings(self, region: str):
         """Validates inputs and processes the file."""
         
         try:
@@ -126,11 +133,12 @@ class AutoProcessingTab:
             if not region:
                 raise ValueError("Регион для фильтрации не обнаружен.")
             
-            self._process_file(region)
+            self.__process_file(region)
         except ValueError as e:
-            messagebox.showerror("Ошибка", str(e))
+            logging.error(f"Ошибка, не удалось обработать с настройками. Ошибка: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось обработать с настройками. Ошибка: {e}")
                 
-    def _get_unique_region(self):
+    def __get_unique_region(self) -> list[str]:
         regions = self.csv_parser.get_unique_regions(self.REGION_COLUMN)
         
         if not regions:
@@ -138,27 +146,34 @@ class AutoProcessingTab:
         
         return regions
 
-    def _process_file(self, region):
+    def __process_file(self, region: str):
         """Helper method to process the file with given settings."""
         try:
-            self._start_processing(region)
+            self.__start_processing(region)
         except Exception as e:
+            logging.error("Ошибка", f"Обработка провалилась: {e}")
             messagebox.showerror("Ошибка", f"Обработка провалилась: {e}")
     
-    def _start_processing(self, region):
+    def __start_processing(self, region: str):
         self.processed_data = DataProcessor(region)
+        logging.info(f"Начинается обработка для региона: {region}")
         
         # Makes sure self.csv_parser is safe to use and not None
         if self.csv_parser and self.csv_parser.data is not None:
-            for _, row in self.csv_parser.data.iterrows():
-                self.processed_data.process_row(row[self.PHONE_COLUMN])
-            self._write_to_excel()
+            try:
+                for row in self.csv_parser.data.itertuples(index=False):
+                    self.processed_data.process_row(getattr(row, self.PHONE_COLUMN))
+                self.__write_to_excel()
+            except Exception as e:
+                logging.error(f"Ошибка во время обработки спарсенных данных: {e}")
         else:
-            print("Ошибка", "Данные CSV не загружены.")
+            logging.error("Ошибка: Данные CSV не загружены.")
         
-        self._reset_values()
+        self.__reset_values()
+        logging.info("Обработка завершена.")
     
-    def _reset_values(self):
+    def __reset_values(self):
+        logging.info("Значения сброшены.")
         # Resets all variable values
         self.file_path = ""
         self.csv_parser = None
@@ -169,23 +184,41 @@ class AutoProcessingTab:
             self.text_box.delete("1.0", "end")
             self.text_box.configure(state="disabled")
     
-    def _write_to_excel(self):
-        valid_writer = ExcelWriter("result/valid_phones.xlsx")
-        invalid_writer = ExcelWriter("result/invalid_phones.xlsx")
-        valid_writer.write_to_excel(self.processed_data.valid_numbers)
-        invalid_writer.write_to_excel(self.processed_data.invalid_numbers)
-        
-        creation_date_valid = valid_writer.get_date()
-        max_entries_valid = valid_writer.get_total_rows()
-        creation_date_invalid = invalid_writer.get_date()
-        max_entries_invalid = invalid_writer.get_total_rows()
-        
-        valid_new_name = f"result/val_{self.file_title}_{creation_date_valid}_{max_entries_valid}.xlsx"
-        invalid_new_name = f"result/inval_{self.file_title}_{creation_date_invalid}_{max_entries_invalid}.xlsx"
-        
-        os.rename(valid_writer.output_file, valid_new_name)
-        os.rename(invalid_writer.output_file, invalid_new_name)
+    def __write_to_excel(self):
+        try:
+            logging.info("Создаем первичные xlsx файлы.")
+            valid_writer = ExcelWriter("result/valid_phones.xlsx")
+            invalid_writer = ExcelWriter("result/invalid_phones.xlsx")
+            
+            # Writes data
+            valid_writer.write_to_excel(self.processed_data.valid_numbers)
+            invalid_writer.write_to_excel(self.processed_data.invalid_numbers)
+            
+            # Renames files
+            valid_new_name = self.__rename_and_log(valid_writer, "val")
+            invalid_new_name = self.__rename_and_log(invalid_writer, "inval")
+            
+            # Notifies user
+            self.__log_and_notify(
+                f"Файлы успешно сохранены: {valid_new_name}, {invalid_new_name}",
+                f"Файлы сохранены:\n{valid_new_name}\n{invalid_new_name}"
+            )
+        except Exception as e:
+            logging.error(f"Ошибка при записи в Excel файл: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось записать данные в файл: {e}")
+    
+    def __rename_and_log(self, writer: ExcelWriter, prefix: str) -> str:
+        date = writer.get_date()
+        total_rows = writer.get_total_rows()
+        new_name = f"result/{prefix}_{self.file_title}_{date}_{total_rows}.xlsx"
+        os.rename(writer.output_file, new_name)
+        logging.info(f"Файл переименован: {writer.output_file} -> {new_name}")
+        return new_name
 
-        print("Готово", "Файл успешно обработан и сохранён.")
-        print(f"Valid file renamed to: {valid_new_name}")
-        print(f"Invalid file renamed to: {invalid_new_name}")
+    def __log_and_notify(self, log_message: str, notify_message: str, level: str = "info"):
+        if level == "info":
+            logging.info(log_message)
+            messagebox.showinfo("Информация", notify_message)
+        elif level == "error":
+            logging.error(log_message)
+            messagebox.showerror("Ошибка", notify_message)

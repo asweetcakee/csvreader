@@ -1,73 +1,111 @@
 import os
-import chardet
 import pandas as pd
-#from tabulate import tabulate
-from prettytable import PrettyTable
+import logging
 
+from charset_normalizer import from_path
+from tabulate import tabulate
 
-# Constructor receives file_path as a param
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 class CSVParser:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.data = None
+    def __init__(self, file_path: str):
+        self.file_path: str = file_path
+        self.data: pd.DataFrame | None = None
+        self.chunk_size = 10000
 
     def read_csv(self):
-        """Reads the CSV file with automatic encoding and delimiter detection."""
+        """Reads the CSV file in chunks for efficiency with automatic encoding and delimiter detection."""
         try:
-            # Detects the delimiter
-            delimiter = self._detect_delimiter(self.file_path)
-            print(f"Обнаружен разделитель: '{delimiter}'")
-
-            # Try reading the file with UTF-8 encoding
-            self.data = pd.read_csv(self.file_path, sep=delimiter, encoding='utf-8', on_bad_lines='skip')
-            print(f"Файл прочитан с кодировкой: UTF-8")
-        except UnicodeDecodeError:
-            print("Ошибка при чтении с кодировкой UTF-8. Применяем автоопределение кодировки...")
+            encoding = self.__detect_encoding()
+            delimiter = self.__detect_delimiter()
+            chunks = self.__read_in_chunks(delimiter, encoding, self.chunk_size)
+            self.data = self.__combine_chunks(chunks)
             
-            # Detects encoding and re-reads the file
-            encoding = self._detect_encoding(self.file_path)
-            print(f"Обнаруживаем кодировку: {encoding}")
-            delimiter = self._detect_delimiter(self.file_path)
-            self.data = pd.read_csv(self.file_path, sep=delimiter, encoding=encoding, on_bad_lines='skip')
-            print(f"Файл прочитан с кодировкой: {encoding}")
+        except Exception as e:
+            logging.error(f"Ошибка при чтении CSV файла: {e}")
+            raise
 
-    def _detect_encoding(self, file_path):
-        """Detects the encoding of the CSV file using chardet."""
-        with open(file_path, 'rb') as f:
-            raw_data = f.read()
-        result = chardet.detect(raw_data)
-        return result['encoding']
+    def __detect_encoding(self):
+        """
+        Detects the encoding of the CSV file using charset-normalizer.
+        Falls back to 'utf-8' if detection fails.
+        """
+        try:
+            result = from_path(self.file_path).best()
+            encoding = result.encoding if result else "utf-8"
+            logging.info(f"Обнаружена кодировка: {encoding}")
+            return encoding
+        except Exception as e:
+            logging.warning(f"Ошибка определения кодировки. Применяем 'utf-8'. Ошибка: {e}")
+            return "utf-8"
     
-    def _detect_delimiter(self, file_path):
-        """Detects the delimiter used in the CSV file."""
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            first_line = f.readline()
-        # Common delimiters to check
-        delimiters = [',', ';', '\t', '|']
-        for delim in delimiters:
-            if delim in first_line:
-                return delim
-        # Default to comma if no common delimiter is found
-        return ','
+    def __detect_delimiter(self):
+        """
+        Detects the delimiter used in the CSV file by analyzing multiple lines.
+        Falls back to ',' if detection fails.
+        """
+        try:
+            with open(self.file_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = [f.readline() for _ in range(3)]  # Analyzes first 3 lines
+
+            delimiters = [",", ";", "\t", "|"] # Common delimiters
+            
+            # counts = {',': 25, ';': 10, '\t': 5, '|': 0}
+            counts = {delim: sum(line.count(delim) for line in lines) for delim in delimiters}
+            detected_delimiter = max(counts, key=counts.get)
+            
+            if counts[detected_delimiter] > 0:
+                logging.info(f"Обнаружен разделитель: '{detected_delimiter}'")
+                return detected_delimiter
+            else:
+                raise ValueError("Ни один правильный разделитель не обнаружен.")
+        except Exception as e:
+            logging.warning(f"Ошибка обнаружения разделителя. Применяем ','. Ошибка: {e}")
+            return ","
     
-    def get_columns(self):
+    def __read_in_chunks(self, delimiter: str, encoding: str, chunk_size: int):
+        """Reads the CSV file in chunks for memory efficiency."""
+        try:
+            logging.info("Приступаем к чтению CSV файла чанками...")
+            chunks = pd.read_csv(
+                self.file_path,
+                sep=delimiter,
+                encoding=encoding,
+                chunksize=chunk_size,
+                on_bad_lines="skip",
+                engine="c",
+            )
+            return chunks
+        except Exception as e:
+            logging.error(f"Ошибка чтения файла чанками: {e}")
+            raise
+    
+    def __combine_chunks(self, chunks: int) -> pd.DataFrame:
+        """Combines the chunks into a single DataFrame."""
+        try:
+            df = pd.concat(chunks, ignore_index=True)
+            logging.info("Успешно удалось соединить чанки в один DataFrame.")
+            return df
+        except Exception as e:
+            logging.error(f"Ошибка объединения чанков в один DataFrame: {e}")
+            raise
+    
+    def get_columns(self) -> str:
         """Returns columns list and first 3 entries"""
+        if self.data is None or self.data.empty:
+            raise ValueError("Нет данных для отображения. CSV можеть быть пуст или неверно отформатирован.")
+        
         preview = self.data.head(3)
-    
-        # Initilizes PrettyTtable lib
-        table = PrettyTable()
-        table.field_names = preview.columns.tolist()
-    
-        # Fills in the data
-        for row in preview.values:
-            table.add_row(row)
-        print(table)
+        
+        # Initialize tabulate
+        table = tabulate(preview, headers=preview.columns.tolist(), tablefmt="grid", showindex=False)
+        return table
 
-    def get_unique_regions(self, region_column):
+    def get_unique_regions(self, region_column: str) -> list[str]:
         """Returns unique regions from a selected column"""
-        if self.data is None:
-            raise ValueError("CSV file is not uploaded.")
+        if self.data is None or self.data.empty:
+            raise ValueError("CSV файл не загружен.")
         return self.data[region_column].str.upper().unique().tolist()
 
-    def get_file_name(self):
+    def get_file_name(self) -> str:
         return os.path.splitext(os.path.basename(self.file_path))[0]

@@ -1,24 +1,30 @@
 import re
 import phonenumbers
+import logging
+
 from enums.CountriesEnum import CountriesEnum
+from typing import Union
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 class DataProcessor:
-    def __init__(self, selected_regions):
+    def __init__(self, selected_regions: list[str]):
         ''' 
             details format:
             {AT: {"label": "Austria", "phone": "43", "phoneLength": [10, 11]}}        
         '''
-        self.details = CountriesEnum.get_region_details(selected_regions)
-        self.valid_numbers = {}
-        self.invalid_numbers = {} 
+        self.details: dict[str, dict[str, Union[str, list[int]]]] = CountriesEnum.get_region_details(selected_regions)
+        self.valid_numbers: dict[str, list[str]] = {}
+        self.invalid_numbers: dict[str, list[str]] = {}
+        logging.info(f"Инициализирован DataProcessor с регионами: {selected_regions}")
     
-    def process_row(self, phone):
-        phone = self.clean_phone(str(phone))
-        allowed_region = list(self.details.keys())[0]
-        allowed_code = self.details[allowed_region].get('phone', '')
-
-        # print(f"Processing phone: {phone}")
-        # print(f"Allowed Region: {allowed_region}, Allowed Code: {allowed_code}")
+    def process_row(self, phone: str):
+        phone = self.__clean_phone(str(phone))
+        
+        # logging.debug(f"Processing phone: {phone}")
+        
+        for allowed_region, region_details in self.details.items():
+            allowed_code = region_details.get('phone', '')
 
         try:
             # Parse the phone number using the allowed region
@@ -38,52 +44,46 @@ class DataProcessor:
 
                     # Apply specific logic for AR region (Argentina), if necessary
                     if allowed_region == "AR":
-                        formatted_number = self.get_correct_AR_phone(formatted_number)
+                        formatted_number = self.__get_correct_AR_phone(formatted_number)
 
                     # Add the valid number to the list
-                    self._add_to_list(allowed_region, formatted_number, self.valid_numbers)
+                    self.__add_to_list(allowed_region, formatted_number, self.valid_numbers)
+                    # logging.debug(f"Valid phone: {formatted_number} for region: {allowed_region}")
+                    return
                 else:
                     # If region or country code does not match, add to invalid numbers
-                    self._add_to_list(allowed_region, phone, self.invalid_numbers)
+                    self.__add_to_list(allowed_region, phone, self.invalid_numbers)
+                    # logging.debug(f"Invalid phone: {phone} for region: {allowed_region}")
             else:
                 # If the phone number is not valid, add to invalid numbers
-                self._add_to_list(allowed_region, phone, self.invalid_numbers)
+                self.__add_to_list(allowed_region, phone, self.invalid_numbers)
+                # logging.debug(f"Invalid phone: {phone} for region: {allowed_region}")
+                
         except phonenumbers.NumberParseException as e:
             # Handle parsing errors by adding the number to invalid numbers
-            self._add_to_list(allowed_region, phone, self.invalid_numbers)
+            self.__add_to_list(allowed_region, phone, self.invalid_numbers)
+            # logging.debug(f"Error parsing phone: {phone}, Exception: {e} \\nInvalid phone: {phone} for region: {allowed_region}")
 
-        # print(f"Valid Numbers: {self.valid_numbers}")
-        # print(f"Invalid Numbers: {self.invalid_numbers}")
-
-
-        
-        # print("--T | invalid dict: ")
-        # print(self.invalid_numbers)
-        # print("--T | valid dict: ")
-        # print(self.valid_numbers)
-
-    def _add_to_list(self, allowed_region, phone, list):
-        if allowed_region not in list:
-            list[allowed_region] = []
-        list[allowed_region].append(phone)
+    def __add_to_list(self, allowed_region: str, phone: str, list: dict[str, list[str]]):
+        list.setdefault(allowed_region, []).append(phone)
     
-    def get_correct_AR_phone(self, phone):
+    def __get_correct_AR_phone(self, phone: str) -> str:
         if len(phone) == 12:
             return (f'{phone[:2]}9{phone[2:]}')
         else:
             return phone
     
-    def get_key(self):
-        for key  in self.valid_numbers.items():
-            return key
-        return "key doesn't exist"
-    
-    def clean_phone(self, phone):
-        """Removes unwanted trailing characters from the phone number."""
-        # Removes unwanted symbols at the end of the string
-        return re.sub(r'[^\d+]$', '', phone)  # Ensures phone ends in a digit
-    
+    # def get_key(self):
+    #     for key  in self.valid_numbers.items():
+    #         return key
+    #     return "key doesn't exist"
+        
+    def __clean_phone(self, phone: str) -> str:
+        """Removes all unwanted characters from the phone number, correctly handling '.0' at the end."""
+        phone = re.sub(r'\.0$', '', phone)  # Removes trailing .0
+        return re.sub(r'\D', '', phone)    # Removes all non-digit characters
+
     def print_details(self):
-        print("--T | Details: ")
-        print(self.details)
+        logging.info(f"Details: {self.details}")
+
 

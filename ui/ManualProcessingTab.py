@@ -151,22 +151,23 @@ class ManualProcessingTab:
             self.csv_parser.read_csv()
             
             # Gets first 3 entries
-            preview_text = self.csv_parser.data.head(3).to_string(index=False)
-            self._update_text_box(preview_text)
+            preview_text = self.csv_parser.get_columns()
+            self.__update_text_box(preview_text)
             
+            # Gets selected file name
             self.file_title = self.csv_parser.get_file_name()
             
-            self._update_dropdowns()  # Depends on dropdowns value
+            self.__update_dropdowns()  # Depends on dropdowns value
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить файл: {e}")
     
-    def _update_text_box(self, text):
-        self.text_box.configure(state="normal")
+    def __update_text_box(self, text):
+        self.text_box.configure(state="normal", font=("Courier", 12))
         self.text_box.delete("1.0", "end")
         self.text_box.insert("end", text)
         self.text_box.configure(state="disabled")
     
-    def _update_dropdowns(self):
+    def __update_dropdowns(self):
         if self.csv_parser and self.csv_parser.data is not None:
             columns = self.csv_parser.data.columns.tolist()
             self.region_dropdown.configure(values=columns)
