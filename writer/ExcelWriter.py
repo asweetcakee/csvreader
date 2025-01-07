@@ -1,4 +1,4 @@
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from datetime import datetime
 
 class ExcelWriter:
@@ -10,7 +10,7 @@ class ExcelWriter:
         :param data: Dict of processed data, key — list name, value — list of phone numbers
         """
         wb = Workbook()
-        rfm_segment = self.get_date()
+        rfm_segment = self.get_rfm_date()
         sheet_created = False  # Track if at least one sheet is created
 
         for sheet_name, phone_numbers in data.items():
@@ -38,8 +38,24 @@ class ExcelWriter:
 
         wb.save(self.output_file)
 
-    def get_date(self):
+    def get_rfm_date(self):
         now = datetime.now()
         date = now.date()
         formatted_date = f"cold_{date.day:02d}_{date.month:02d}"
         return formatted_date
+    
+    def get_date(self):
+        now = datetime.now()
+        date = now.date()
+        formatted_date = f"{date.day:02d}.{date.month:02d}"
+        return formatted_date
+
+    def get_total_rows(self):
+        """
+        Returns the total number of rows across all sheets in the Excel file.
+        Used for the final file title renaming.
+        """
+        wb = load_workbook(self.output_file, read_only=True)  # Use read-only mode for efficiency
+        total_rows = sum(wb[sheet].max_row for sheet in wb.sheetnames)  # Sum max_row for all sheets
+        wb.close()  # Explicitly close the workbook to release the file handle
+        return total_rows - 1

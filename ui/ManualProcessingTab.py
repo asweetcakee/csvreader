@@ -1,3 +1,4 @@
+import os
 import customtkinter
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -13,6 +14,7 @@ class ManualProcessingTab:
         self.parent = parent
         self.csv_parser = None
         self.selected_region = ""
+        self.file_title = ""
         
         self.region_dropdown = None
         self.phone_dropdown = None
@@ -92,6 +94,9 @@ class ManualProcessingTab:
         if self.csv_parser.data is not None:
             # Gets selected column from region_dropdown
             selected_column = self.region_dropdown.get()
+            
+            print("--T | selected column")
+            print(selected_column)
 
             if selected_column:
                 try:
@@ -100,6 +105,11 @@ class ManualProcessingTab:
                     
                     # Get unique regions
                     regions = self.csv_parser.get_unique_regions(selected_column)
+                    print("--T | unique regions")
+                    print(regions)
+                    
+                    # Filter out NaN or None values
+                    regions = [region for region in regions if isinstance(region, str) and region.strip()]
                     
                     # Check if regions is not empty
                     if not regions:
@@ -143,6 +153,8 @@ class ManualProcessingTab:
             # Gets first 3 entries
             preview_text = self.csv_parser.data.head(3).to_string(index=False)
             self._update_text_box(preview_text)
+            
+            self.file_title = self.csv_parser.get_file_name()
             
             self._update_dropdowns()  # Depends on dropdowns value
         except Exception as e:
@@ -247,4 +259,18 @@ class ManualProcessingTab:
         invalid_writer = ExcelWriter("result/invalid_phones.xlsx")
         valid_writer.write_to_excel(self.processed_data.valid_numbers)
         invalid_writer.write_to_excel(self.processed_data.invalid_numbers)
+        
+        creation_date_valid = valid_writer.get_date()
+        max_entries_valid = valid_writer.get_total_rows()
+        creation_date_invalid = invalid_writer.get_date()
+        max_entries_invalid = invalid_writer.get_total_rows()
+        
+        valid_new_name = f"result/val_{self.file_title}_{creation_date_valid}_{max_entries_valid}.xlsx"
+        invalid_new_name = f"result/inval_{self.file_title}_{creation_date_invalid}_{max_entries_invalid}.xlsx"
+        
+        os.rename(valid_writer.output_file, valid_new_name)
+        os.rename(invalid_writer.output_file, invalid_new_name)
+
         print("Готово", "Файл успешно обработан и сохранён.")
+        print(f"Valid file renamed to: {valid_new_name}")
+        print(f"Invalid file renamed to: {invalid_new_name}")

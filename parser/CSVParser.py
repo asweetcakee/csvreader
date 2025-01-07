@@ -1,3 +1,4 @@
+import os
 import chardet
 import pandas as pd
 #from tabulate import tabulate
@@ -51,14 +52,6 @@ class CSVParser:
     
     def get_columns(self):
         """Returns columns list and first 3 entries"""
-        # if self.data is None:
-        #     raise ValueError("CSV file is not uploaded.")
-        # return {col: self.data[col].head(3).tolist() for col in self.data.columns}
-        
-        # preview = self.data.head(3)
-        # #result = tabulate(preview, headers='keys', tablefmt='grid', showindex=False)
-        # result = tabulate(preview, headers='keys', tablefmt='grid', showindex=False, numalign="right")
-        # print(result)
         preview = self.data.head(3)
     
         # Initilizes PrettyTtable lib
@@ -75,3 +68,6 @@ class CSVParser:
         if self.data is None:
             raise ValueError("CSV file is not uploaded.")
         return self.data[region_column].str.upper().unique().tolist()
+
+    def get_file_name(self):
+        return os.path.splitext(os.path.basename(self.file_path))[0]
