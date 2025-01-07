@@ -19,3 +19,5 @@ result/*
 
 csvfiles/*
 !csvfiles/.gitkeep
+
+parser/CSVParserFeaturesTest.py
