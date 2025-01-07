@@ -13,3 +13,9 @@ venv/
 
 List_of_modifications.txt
 NotInUse/
+
+result/*
+!result/.gitkeep
+
+csvfiles/*
+!csvfiles/.gitkeep
