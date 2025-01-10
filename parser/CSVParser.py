@@ -12,6 +12,8 @@ class CSVParser:
         self.file_path: str = file_path
         self.data: pd.DataFrame | None = None
         self.chunk_size = 10000
+        self.corrupted_encoding: bool = False
+        self.rows_quantity: int = 0
 
     def read_csv(self):
         """Reads the CSV file in chunks for efficiency with automatic encoding and delimiter detection."""
@@ -28,16 +30,29 @@ class CSVParser:
     def __detect_encoding(self):
         """
         Detects the encoding of the CSV file using charset-normalizer.
+        Marks the encoding as corrupted if it is not 'utf-8' or 'ascii'.
         Falls back to 'utf-8' if detection fails.
         """
         try:
             result = from_path(self.file_path).best()
-            encoding = result.encoding if result else "utf-8"
-            logging.info(f"Обнаружена кодировка: {encoding}")
+            encoding = result.encoding.lower() if result else "utf-8"
+            
+            # Marks corrupted if encoding is not 'utf-8' or 'ascii'
+            self.corrupted_encoding = encoding not in ["utf-8", "ascii"]
+
+            # Logs the detected encoding
+            if self.corrupted_encoding:
+                logging.warning(f"Обнаружена подозрительная кодировка: {encoding}")
+            else:
+                logging.info(f"Обнаружена кодировка: {encoding}")
+            
             return encoding
         except Exception as e:
+            # Fallback to 'utf-8' and mark encoding as corrupted
+            self.corrupted_encoding = True
             logging.warning(f"Ошибка определения кодировки. Применяем 'utf-8'. Ошибка: {e}")
             return "utf-8"
+
     
     def __detect_delimiter(self):
         """
@@ -84,6 +99,9 @@ class CSVParser:
         """Combines the chunks into a single DataFrame."""
         try:
             df = pd.concat(chunks, ignore_index=True)
+            # Calculates total rows
+            self.rows_quantity = len(df)
+            
             logging.info("Успешно удалось соединить чанки в один DataFrame.")
             return df
         except Exception as e:
@@ -109,3 +127,9 @@ class CSVParser:
 
     def get_file_name(self) -> str:
         return os.path.splitext(os.path.basename(self.file_path))[0]
+    
+    def is_encoding_corrupted(self) -> bool:
+        return self.corrupted_encoding
+    
+    def get_rows_quantity(self) -> int:
+        return self.rows_quantity
