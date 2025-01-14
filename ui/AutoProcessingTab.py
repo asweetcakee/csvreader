@@ -1,34 +1,24 @@
 import os
 import customtkinter
 import logging
-import time
 
 from tkinter import filedialog, messagebox
 from PIL import Image
 
-from parser.CSVParser import CSVParser
-from processor.DataProcessor import DataProcessor
-from writer.ExcelWriter import ExcelWriter
-from logger.TimeLoggerExcel import TimeLoggerExcel
+from processor.DataProcessorManager import DataProcessorManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 class AutoProcessingTab:
     def __init__(self, parent: customtkinter.CTkFrame):
         self.parent: customtkinter.CTkFrame = parent
-        self.csv_parser = None
+        self.data_manager = DataProcessorManager()
         self.file_path: str = ""
-        self.file_title: str = ""
-        self.FTD: str = ""
-        self.total_rows: int = 0
-        self.time_logger = TimeLoggerExcel()
-        
-        # Metadata
-        self.file_rows = 0
-        
+                        
         # CONSTANTS
         self.REGION_COLUMN: str = "country"
         self.PHONE_COLUMN: str = "phone"
+        self.FTD_COLUMN: str = "firstdeposit_time"
         
         self.checkbox_var: customtkinter.StringVar = customtkinter.StringVar(value="off")
         self.checkbox_var2: customtkinter.StringVar = customtkinter.StringVar(value="off")
@@ -101,23 +91,13 @@ class AutoProcessingTab:
 
     def __load_csv(self):
         try:
-            # Starts the time logger for parsing
-            self.time_logger.start_timer("parsing")
-            
-            # Load and display CSV preview
-            self.csv_parser = CSVParser(self.file_path)
-            self.csv_parser.read_csv()
-            
-            # Stops the time logger for parsing
-            self.time_logger.stop_timer("parsing")
-            
             # Gets first 3 entries preview
-            preview_text = self.csv_parser.get_columns()
+            preview_text = self.data_manager.load_csv(
+                self.file_path,
+                required_headers=[self.REGION_COLUMN, self.PHONE_COLUMN, self.FTD_COLUMN]
+            )
             self.__update_text_box(preview_text)
-            
-            # Gets selected file name
-            self.file_title = self.csv_parser.get_file_name()
-            
+
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить файл: {e}")
 
@@ -135,166 +115,36 @@ class AutoProcessingTab:
         self.checkbox_var.set("off")
         self.checkbox_var2.set("off")
     
-    def __apply_settings(self):
-        if not self.csv_parser:
-            messagebox.showerror("Ошибка", "Сначала выберите CSV файл.")
-            return
-
-        # Starts the time logger for processing
-        self.time_logger.start_timer("processing")
-        
-        if self.checkbox_var.get() == "on" and self.checkbox_var2.get() == "off":
-            self.__process_ftd_case()
-        elif self.checkbox_var.get() == "off" and self.checkbox_var2.get() == "on":
-            self.__process_no_ftd_case()
-        elif self.checkbox_var.get() == "on" and self.checkbox_var2.get() == "on":
-            messagebox.showwarning("Предпупреждение", "Нельзя отмечать одновременно 2 настройки.")
-            logging.warning(f"Нельзя отмечать одновременно 2 настройки. Отмечены были: FTD {self.checkbox_var.get()} и NO FTD {self.checkbox_var2.get()}")
-            self.__clear_checkbox_values()
-            return
-            
-        region = self.__get_unique_region()[0]
-        self.__process_with_settings(region)
-        
-        # Stops the time logger for processing
-        self.time_logger.stop_timer("processing")
-        
-    def __process_ftd_case(self):     
-        try:
-            self.csv_parser.data = self.csv_parser.data[self.csv_parser.data['firstdeposit_time'].notnull() & (self.csv_parser.data['firstdeposit_time'] != '')]     
-            self.FTD = "FTD_"                      
-        except Exception as e:
-            self.FTD = ""
-            messagebox.showerror("Ошибка", f"Обработка FTD провалилась: {e}")
-    
-    def __process_no_ftd_case(self):     
-        try:
-            # Filters data where 'firstdeposit_time' is null or empty
-            self.csv_parser.data = self.csv_parser.data[
-                self.csv_parser.data['firstdeposit_time'].isnull() | 
-                (self.csv_parser.data['firstdeposit_time'] == '')
-            ]
-            self.FTD = "NoFTD_"  # Marking this as "No FTD"
-        except Exception as e:
-            self.FTD = ""
-            messagebox.showerror("Ошибка", f"Обработка данных без FTD провалилась: {e}")
-    
-    def __process_with_settings(self, region: str):
-        """Validates inputs and processes the file."""
-        
-        try:
-            #!!!!!!!!!!!! VALIDATE CSV HEADERS !!!!!!!!!!!!!!!!
-            #self.validate_csv_headers(region_col, phone_col)
-            
-            # Ensures the filter region is set
-            if not region:
-                raise ValueError("Регион для фильтрации не обнаружен.")
-            
-            self.__process_file(region)
-        except ValueError as e:
-            logging.error(f"Ошибка, не удалось обработать с настройками. Ошибка: {e}")
-            messagebox.showerror("Ошибка", f"Не удалось обработать с настройками. Ошибка: {e}")
-                
-    def __get_unique_region(self) -> list[str]:
-        regions = self.csv_parser.get_unique_regions(self.REGION_COLUMN)
-        
-        if not regions:
-            raise ValueError("Столбец не содержит допустимых кодов регионов.")
-        
-        return regions
-
-    def __process_file(self, region: str):
-        """Helper method to process the file with given settings."""
-        try:
-            self.__start_processing(region)
-        except Exception as e:
-            logging.error("Ошибка", f"Обработка провалилась: {e}")
-            messagebox.showerror("Ошибка", f"Обработка провалилась: {e}")
-    
-    def __start_processing(self, region: str):
-        self.processed_data = DataProcessor(region)
-        logging.info(f"Начинается обработка для региона: {region}")
-        
-        # Makes sure self.csv_parser is safe to use and not None
-        if self.csv_parser and self.csv_parser.data is not None:
-            try:
-                for row in self.csv_parser.data.itertuples(index=False):
-                    self.processed_data.process_row(getattr(row, self.PHONE_COLUMN))
-                self.__write_to_excel()
-            except Exception as e:
-                logging.error(f"Ошибка во время обработки спарсенных данных: {e}")
-        else:
-            logging.error("Ошибка: Данные CSV не загружены.")
-        
-        logging.info("Обработка завершена.")
-    
     def __reset_values(self):
-        logging.info("Значения сброшены.")
+        logging.info("Значения UI сброшены.")
         # Resets all variable values
-        self.file_path = ""
-        self.csv_parser = None
         self.checkbox_var.set("off")
         self.checkbox_var2.set("off")
-        self.FTD = ""
-        self.total_rows = 0
         
         if hasattr(self, 'text_box'):
             self.text_box.configure(state="normal")
             self.text_box.delete("1.0", "end")
             self.text_box.configure(state="disabled")
     
-    def __write_to_excel(self):
+    def __apply_settings(self):
+        
+        if self.checkbox_var.get() == "on" and self.checkbox_var2.get() == "on":
+            messagebox.showwarning("Предупреждение", "Нельзя отмечать одновременно 2 настройки.")
+            logging.warning("Отмечены одновременно FTD и No FTD.")
+            self.__clear_checkbox_values()
+            return
+        
         try:
-            # Starts the time logger for writing
-            self.time_logger.start_timer("writing")
-            logging.info("Создаем первичные xlsx файлы.")
-            valid_writer = ExcelWriter("result/valid_phones.xlsx")
-            invalid_writer = ExcelWriter("result/invalid_phones.xlsx")
+            # Applies filtering and processing
+            ftd_filter = "FTD" if self.checkbox_var.get() == "on" else "No FTD" if self.checkbox_var2.get() == "on" else ""
+            self.data_manager.process_data(self.REGION_COLUMN, self.PHONE_COLUMN, self.FTD_COLUMN, ftd_filter)
             
-            # Writes data
-            valid_writer.write_to_excel(self.processed_data.valid_numbers)
-            invalid_writer.write_to_excel(self.processed_data.invalid_numbers)
-            
-            # Renames files
-            valid_new_name = self.__rename_and_log(valid_writer, "val")
-            invalid_new_name = self.__rename_and_log(invalid_writer, "inval")
-            
-            # Stops the time logger for writing
-            self.time_logger.stop_timer("writing")
-                        
-            # Log time in Excel VALID ONLY
-            self.time_logger.log(
-                file_rows=self.csv_parser.get_rows_quantity(),
-                file_name=self.file_title,
-                corrupted=self.csv_parser.is_encoding_corrupted(),
-                FTD=self.FTD,
-                total_rows=self.total_rows
-            )
+            # Writes to excel
+            valid_file, invalid_file = self.data_manager.write_to_excel()
+                
+            messagebox.showinfo("Готово", f"Файлы сохранены:\n{valid_file}\n{invalid_file}")
             
             # Resets all values
             self.__reset_values()
-            
-            # Notifies user
-            self.__log_and_notify(
-                f"Файлы успешно сохранены: {valid_new_name}, {invalid_new_name}",
-                f"Файлы сохранены:\n{valid_new_name}\n{invalid_new_name}"
-            )
         except Exception as e:
-            logging.error(f"Ошибка при записи в Excel файл: {e}")
-            messagebox.showerror("Ошибка", f"Не удалось записать данные в файл: {e}")
-    
-    def __rename_and_log(self, writer: ExcelWriter, prefix: str) -> str:
-        date = writer.get_date()
-        self.total_rows = writer.get_total_rows()
-        new_name = f"result/{self.FTD}{prefix}_{self.file_title}_{date}_{self.total_rows}.xlsx"
-        os.rename(writer.output_file, new_name)
-        logging.info(f"Файл переименован: {writer.output_file} -> {new_name}")
-        return new_name
-
-    def __log_and_notify(self, log_message: str, notify_message: str, level: str = "info"):
-        if level == "info":
-            logging.info(log_message)
-            messagebox.showinfo("Информация", notify_message)
-        elif level == "error":
-            logging.error(log_message)
-            messagebox.showerror("Ошибка", notify_message)
+            messagebox.showerror("Ошибка", str(e))
