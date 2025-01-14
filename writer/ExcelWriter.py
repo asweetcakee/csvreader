@@ -20,7 +20,7 @@ class ExcelWriter:
             # Fill in the data
             import_id = 701120240001
             for phone in phone_numbers:
-                ws.append([phone, "", 1995, "", import_id, "", rfm_segment, import_id])
+                ws.append([phone, phone, 1995, "", import_id, "", rfm_segment, import_id])
                 import_id += 1
 
             sheet_created = True  # Mark that at least one sheet is created
