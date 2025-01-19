@@ -17,6 +17,12 @@ NotInUse/
 result/*
 !result/.gitkeep
 
+dist/
+venv/
+build/
+
+*.spec
+
 csvfiles/*
 !csvfiles/.gitkeep
 

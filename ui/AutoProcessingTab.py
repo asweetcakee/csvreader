@@ -1,4 +1,5 @@
 import os
+import sys
 import customtkinter
 import logging
 
@@ -39,11 +40,25 @@ class AutoProcessingTab:
         top_frame.grid_columnconfigure(1, weight=1)
 
         # Logo
-        image = Image.open("img/top_title_logo.png")
-        ctk_image = customtkinter.CTkImage(light_image=image, dark_image=image, size=(90, 45))
-        label = customtkinter.CTkLabel(top_frame, text="", width=120, height=100, image=ctk_image, fg_color="#d9d9d9", corner_radius=5)
-        label.grid(row=0, column=0, padx=10, pady=0)
+        try:
+            img_path = self.__resource_path("img/logo.png")
 
+            with open(img_path, "rb") as img_file:
+                image = Image.open(img_file)
+                image.load()  # Ensure the image is fully loaded into memory
+
+            # Create the CTkImage after ensuring the image is loaded
+            ctk_image = customtkinter.CTkImage(light_image=image, dark_image=image, size=(90, 45))
+            label = customtkinter.CTkLabel(top_frame, text="", width=120, height=100, image=ctk_image, fg_color="#d9d9d9", corner_radius=5)
+            label.grid(row=0, column=0, padx=10, pady=0)
+        except FileNotFoundError:
+            logging.error(f"Image not found at path: {img_path}")
+            messagebox.showerror("Error", f"Image file not found: {img_path}")
+        except Exception as e:
+            logging.error(f"Error opening image: {e}")
+            messagebox.showerror("Error", f"Error opening image file: {img_path}\n{e}")
+
+        
         # Selection button
         select_file_button = customtkinter.CTkButton(
             top_frame, text="Выбрать файл", height=100, corner_radius=5,
@@ -148,3 +163,12 @@ class AutoProcessingTab:
             self.__reset_values()
         except Exception as e:
             messagebox.showerror("Ошибка", str(e))
+            
+    def __resource_path(self, relative_path):
+        """ Get the absolute path to a resource, works for dev and for PyInstaller """
+        try:
+            base_path = sys._MEIPASS  # PyInstaller runtime temp directory
+        except AttributeError:
+            base_path = os.path.abspath(".")  # For development
+        return os.path.join(base_path, relative_path)
+

@@ -94,10 +94,15 @@ class DataProcessorManager:
                 if self.__is_eligible_phone_column(first_rows[col]):
                     eligible_phones.append(col)
 
+            # Updates file metadata
+            self.file_rows = self.csv_parser.get_rows_quantity()
+            self.file_title = self.csv_parser.get_file_name()
+            
             return {
                 "eligible_countries": eligible_countries,
                 "eligible_phones": eligible_phones
             }
+            
         except Exception as e:
             logging.error(f"Ошибка загрузки CSV файла для ручной обработки: {e}")
             raise

@@ -73,7 +73,7 @@ class TimeLoggerExcel:
         ws = wb.active
         ws.append([
             date, time_, file_rows, file_name, corrupted_str, FTD, 
-            val_total_rows, inval_total_rows,
+            inval_total_rows, val_total_rows,
             parsing_text, parsing_excel,
             processing_text, processing_excel,
             writing_text, writing_excel,
