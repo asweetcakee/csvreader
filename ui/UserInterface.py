@@ -8,6 +8,6 @@ class UserInterface:
         
     def configure_window(self):
         self.root.title("CSV Reader")
-        self.root.geometry(f"{600}x{530}")
+        self.root.geometry(f"{600}x{550}")
         
     

@@ -1,3 +1,4 @@
+import os
 from openpyxl import Workbook, load_workbook
 from datetime import datetime
 
@@ -9,15 +10,20 @@ class ExcelWriter:
         """
         :param data: Dict of processed data, key — list name, value — list of phone numbers
         """
+        
+        # Checks if the file exists and delete it to avoid the "file already exists" error
+        if os.path.exists(self.output_file):
+            os.remove(self.output_file)
+        
         wb = Workbook()
         rfm_segment = self.get_rfm_date()
-        sheet_created = False  # Track if at least one sheet is created
+        sheet_created = False  # Tracks if at least one sheet is created
 
         for sheet_name, phone_numbers in data.items():
             ws = wb.create_sheet(sheet_name)
             ws.append(["phone", "full_name", "age", "city", "import_id", "gender", "rfm_segment", "game_id"])
 
-            # Fill in the data
+            # Fills in the data
             import_id = 701120240001
             for phone in phone_numbers:
                 ws.append([phone, phone, 1995, "", import_id, "", rfm_segment, import_id])
@@ -50,7 +56,7 @@ class ExcelWriter:
         formatted_date = f"{date.day:02d}.{date.month:02d}"
         return formatted_date
 
-    def get_total_rows(self):
+    def get_total_rows(self) -> int:
         """
         Returns the total number of rows across all sheets in the Excel file.
         Used for the final file title renaming.

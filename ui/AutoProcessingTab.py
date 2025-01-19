@@ -137,7 +137,7 @@ class AutoProcessingTab:
         try:
             # Applies filtering and processing
             ftd_filter = "FTD" if self.checkbox_var.get() == "on" else "No FTD" if self.checkbox_var2.get() == "on" else ""
-            self.data_manager.process_data(self.REGION_COLUMN, self.PHONE_COLUMN, self.FTD_COLUMN, ftd_filter)
+            self.data_manager.process_data(self.REGION_COLUMN, self.PHONE_COLUMN, "", self.FTD_COLUMN, ftd_filter)
             
             # Writes to excel
             valid_file, invalid_file = self.data_manager.write_to_excel()

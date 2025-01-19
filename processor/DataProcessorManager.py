@@ -13,7 +13,8 @@ class DataProcessorManager:
         self.data_processor: DataProcessor | None = None
         self.time_logger = TimeLoggerExcel()
         self.file_rows: int = 0
-        self.total_rows: int = 0
+        self.val_total_rows: int = 0
+        self.inval_total_rows: int = 0
         self.file_title: str = ""
         self.FTD: str = ""
         
@@ -81,7 +82,7 @@ class DataProcessorManager:
                 raise ValueError("CSV file is empty or not loaded.")
             
             # Analyzes the first 5 rows for eligible columns
-            first_rows = self.csv_parser.data.head(5)
+            first_rows = self.csv_parser.data.head(20)
             columns = first_rows.columns.tolist()
 
             eligible_countries = []
@@ -106,9 +107,14 @@ class DataProcessorManager:
         Checks if a column is eligible to be a country column.
         """
         try:
-            # Drop NaN and check for valid 2-letter country codes
-            valid_country_codes = column_data.dropna().str.match(r"^[a-zA-Z]{2}$")
-            # Ensure at least 60% of the rows match
+            # Drops NaN values
+            non_empty_data = column_data.dropna()
+            if len(non_empty_data) == 0:  # If the column is entirely empty, it's not eligible
+                return False
+            
+            # Checks for valid 2-letter country codes
+            valid_country_codes = non_empty_data.str.match(r"^[a-zA-Z]{2}$")
+            # Ensures at least 60% of the rows match
             return valid_country_codes.sum() >= len(column_data.dropna()) * 0.6
         except Exception:
             return False
@@ -118,8 +124,25 @@ class DataProcessorManager:
         Checks if a column is eligible to be a phone column.
         """
         try:
-            valid_phone_numbers = column_data.dropna().str.match(r"^\+?[0-9]{6,15}$")
-            return valid_phone_numbers.sum() >= len(column_data) * 0.6  # At least 60% match
+            # Drops NaN values
+            non_empty_data = column_data.dropna()
+            if len(non_empty_data) == 0:  # If the column is entirely empty, it's not eligible
+                return False
+            
+            # Matches valid phone numbers (numeric strings with optional '+' at the start)
+            valid_phone_numbers = non_empty_data.str.match(r"^\+?[0-9]{6,15}$")
+            
+            # Additional strict rule: Reject columns where a significant number of rows contain very short numeric strings
+            short_numeric_entries = non_empty_data.str.match(r"^[0-9]{1,5}$")
+            if short_numeric_entries.sum() > len(non_empty_data) * 0.2:  # Allow at most 20% short numeric entries
+                return False    
+            
+            # Reject columns with more than 20% alphabetic or mixed entries
+            invalid_entries = non_empty_data.str.contains(r"[a-zA-Z]", na=False)
+            if invalid_entries.sum() > len(non_empty_data) * 0.1:
+                return False
+        
+            return valid_phone_numbers.sum() >= len(non_empty_data) * 0.6 # At least 60% match
         except Exception:
             return False
     
@@ -135,11 +158,13 @@ class DataProcessorManager:
         self.csv_parser.data = self.csv_parser.data[mask]
         return "NoFTD_"
     
-    def process_data(self, region_column: str, phone_column: str, ftd_column: str, ftd_filter: str):
+    def process_data(self, region_column: str, phone_column: str, filter_region: str, ftd_column: str, ftd_filter: str):
         """
         Filters and processes data based on the provided FTD filter.
         :param region_column: The column for region codes.
         :param phone_column: The column for phone numbers.
+        :param filter_region: A specific region to filter, or "" to use the first unique region.
+        :param ftd_column: The column for FTD filtering.
         :param ftd_filter: "FTD" for rows with first deposit times, "No FTD" for rows without.
         """
         try:
@@ -148,7 +173,7 @@ class DataProcessorManager:
             
             # Starts the time logger for processing
             self.time_logger.start_timer(self.TIME_LOGGER_PROCESSING)
-            
+                        
             # Applies FTD filtering
             if ftd_filter == "FTD":
                 self.FTD = self.__process_ftd_case(ftd_column)
@@ -157,13 +182,11 @@ class DataProcessorManager:
             else:
                 self.FTD = ""
 
-            # Gets unique regions for processing
-            unique_regions = self.csv_parser.get_unique_regions(region_column)
-            if not unique_regions:
-                raise ValueError("Регион для фильтрации не обнаружен.")
+            # Determines the region to process
+            region = self.__determine_region(region_column, filter_region)
             
             # Starts processing
-            self.data_processor = DataProcessor(unique_regions[0])
+            self.data_processor = DataProcessor(region)
             for row in self.csv_parser.data.itertuples(index=False):
                 self.data_processor.process_row(getattr(row, phone_column))
             
@@ -172,7 +195,29 @@ class DataProcessorManager:
         except Exception as e:
             logging.error(f"Ошибка обработки данных: {e}")
             raise
-
+        
+    def __determine_region(self, region_column: str, filter_region: str) -> str:
+        """
+        Determines the region to process based on the filter_region or unique regions.
+        :param region_column: The column for region codes.
+        :param filter_region: A specific region to filter, or "" to use the first unique region.
+        :return: The selected region.
+        """
+        if filter_region:
+            return filter_region  # Use the specified filter_region directly
+        
+        # Gets unique regions
+        unique_regions = self.csv_parser.get_unique_regions(region_column)
+        if not unique_regions:
+            raise ValueError(f"Не удалось найти уникальные регионы в колонке: {region_column}")
+        
+        if len(unique_regions) == 1:
+            logging.info(f"Используется единственный уникальный регион: {unique_regions[0]}")
+            return unique_regions[0]  # If only one unique region exists, return it
+        
+        logging.info(f"Обнаружено несколько регионов в колонке {region_column}: {unique_regions}")
+        return unique_regions[0]  # Default to the first region if multiple exist
+        
     def __reset_values(self):
         logging.info("Значения переменных сброшены.")
         # Resets all variable values
@@ -182,7 +227,8 @@ class DataProcessorManager:
         self.data_processor = None
         self.FTD = ""
         self.file_rows = 0
-        self.total_rows = 0
+        self.val_total_rows = 0
+        self.inval_total_rows = 0
     
     def write_to_excel(self) -> tuple[str, str]:
         """
@@ -205,9 +251,9 @@ class DataProcessorManager:
             invalid_writer.write_to_excel(self.data_processor.invalid_numbers)
 
             # Renames and log file paths
-            valid_file_path = self.__rename_file(valid_writer, "val")
-            invalid_file_path = self.__rename_file(invalid_writer, "inval")
-            
+            valid_file_path, self.inval_total_rows = self.__rename_file(valid_writer, "val")
+            invalid_file_path, self.val_total_rows = self.__rename_file(invalid_writer, "inval")
+                        
             # Stops the time logger for writing
             self.time_logger.stop_timer(self.TIME_LOGGER_WRITING)
 
@@ -217,7 +263,8 @@ class DataProcessorManager:
                 file_name=self.file_title,
                 corrupted=self.csv_parser.is_encoding_corrupted(),
                 FTD=self.FTD,
-                total_rows=self.total_rows
+                val_total_rows=self.val_total_rows,
+                inval_total_rows=self.inval_total_rows
             )
             
             # Resets all values
@@ -270,16 +317,23 @@ class DataProcessorManager:
             logging.error(f"Error getting unique values from column {column_name}: {e}")
             raise
     
-    def __rename_file(self, writer: ExcelWriter, prefix: str) -> str:
+    def __rename_file(self, writer: ExcelWriter, prefix: str) -> tuple[str, int]:
         """
         Renames an Excel file with the appropriate prefix and metadata.
         :param writer: ExcelWriter instance.
         :param prefix: Prefix for the filename (e.g., "val" or "inval").
         :return: New file path.
         """
+        
         date = writer.get_date()
-        self.total_rows = writer.get_total_rows()
-        new_file_name = os.path.join(self.result_folder, f"{self.FTD}{prefix}_{self.file_title}_{date}_{self.total_rows}.xlsx")
+        total_rows = writer.get_total_rows()
+        new_file_name = os.path.join(self.result_folder, f"{self.FTD}{prefix}_{self.file_title}_{date}_{total_rows}.xlsx")
+        
+        # Checks if the file already exists and remove it to avoid errors
+        if os.path.exists(new_file_name):
+            os.remove(new_file_name)
+        
+        # Renames the file
         os.rename(writer.output_file, new_file_name)
         logging.info(f"Файл переименован: {writer.output_file} -> {new_file_name}")
-        return new_file_name
+        return new_file_name, total_rows

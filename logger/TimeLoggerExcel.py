@@ -28,9 +28,10 @@ class TimeLoggerExcel:
         # Add headers
         headers = [
             "Date", "Time", "CSV File Rows", "File Name", "Corrupted Unicode",
-            "FTD", "Total Parsed Rows", "Parsing Time (Text)", "Parsing Time (Excel)",
+            "FTD", "Valid Parsed Rows", "Invalid Parsed Rows", "Parsing Time (Text)", "Parsing Time (Excel)",
             "Processing Time (Text)", "Processing Time (Excel)",
-            "Writing Time (Text)", "Writing Time (Excel)"
+            "Writing Time (Text)", "Writing Time (Excel)",
+            "Total spent time (Text)", "Total spent time (Excel)"
         ]
         ws.append(headers)
 
@@ -50,7 +51,7 @@ class TimeLoggerExcel:
             raise ValueError(f"Timer for phase '{phase}' was not started.")
         self.durations[phase] = time.perf_counter() - self.start_times[phase]
 
-    def log(self, file_rows: int, file_name: str, corrupted: bool, FTD: str, total_rows: int):
+    def log(self, file_rows: int, file_name: str, corrupted: bool, FTD: str, val_total_rows: int, inval_total_rows: int):
         """Logs the time data into the Excel file."""
         now = datetime.now()
         date = now.strftime("%d.%m.%Y")
@@ -58,6 +59,10 @@ class TimeLoggerExcel:
         corrupted_str = "YES" if corrupted else "NO"
         FTD = "YES" if FTD == "FTD_" else "NO"
 
+        # Calculates total time
+        total_seconds = sum(self.durations.values())
+        total_text, total_excel = self.__format_time(total_seconds)
+        
         # Formats times for text and Excel
         parsing_text, parsing_excel = self.__format_time(self.durations.get("parsing", 0.0))
         processing_text, processing_excel = self.__format_time(self.durations.get("processing", 0.0))
@@ -67,14 +72,16 @@ class TimeLoggerExcel:
         wb = load_workbook(self.log_file_path)
         ws = wb.active
         ws.append([
-            date, time_, file_rows, file_name, corrupted_str, FTD, total_rows,
+            date, time_, file_rows, file_name, corrupted_str, FTD, 
+            val_total_rows, inval_total_rows,
             parsing_text, parsing_excel,
             processing_text, processing_excel,
-            writing_text, writing_excel
+            writing_text, writing_excel,
+            total_text, total_excel
         ])
 
         # Applies Excel time number format to duration columns
-        duration_cols = ["I", "K", "M"]  # Columns for Excel durations
+        duration_cols = ["J", "L", "N", "P"]  # Columns for Excel durations
         for col in duration_cols:
             ws[f"{col}{ws.max_row}"].number_format = 'hh:mm:ss.000'
 
